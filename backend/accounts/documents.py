@@ -36,3 +36,17 @@ class UserDocument:
             "is_active": True,
             "created_at": datetime.now(timezone.utc),
         }
+
+class RefreshTokenDocument:
+
+    collection_name = "refresh_tokens"
+
+    @staticmethod
+    def create(user_id, jti, expires_at):
+        return {
+        "jti": jti,
+        "user_id": user_id,
+        "expires_at": expires_at,
+        "revoked": False,
+        "created_at": datetime.now(timezone.utc),
+        }

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-
+from uuid import uuid4
 import jwt
 from django.conf import settings
 
@@ -22,6 +22,7 @@ def create_refresh_token(user):
 	now = datetime.now(timezone.utc)
 	payload = {
 		"type": "refresh",
+		"jti": str(uuid4()),
 		"user_id": user["id"],
 		"role": user["role"],
 		"iat": now,
