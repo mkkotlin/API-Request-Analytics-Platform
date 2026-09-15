@@ -26,9 +26,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv(
+        "ALLOWED_HOSTS",
+        "localhost,127.0.0.1",
+    ).split(",")
+    if host.strip()
+]
 
 
 # Application definition
@@ -41,14 +48,18 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    "drf_spectacular",
+    "corsheaders",
     'accounts',
     'analytics',
+    'health',
 ]
 
 DEFAULT_AUTO_FIELD = "django_mongodb_backend.fields.ObjectIdAutoField"
 
 MIDDLEWARE = [
     'analytics.middleware.APIRequestTrackingMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -144,10 +155,129 @@ MAILERS = {
     },
 }
 
-JWT_SECRET_KEY=os.getenv("JWT_SECRET_KEY", SECRET_KEY)
-JWT_ACCESS_MINUTES=30
-JWT_REFRESH_DAYS=7
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:4200",
+    ).split(",")
+    if origin.strip()
+]
+
+MONGO_SERVER_SELECTION_TIMEOUT_MS = int(
+    os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000")
+)
+MONGO_CONNECT_TIMEOUT_MS = int(
+    os.getenv("MONGO_CONNECT_TIMEOUT_MS", "5000")
+)
+MONGO_SOCKET_TIMEOUT_MS = int(
+    os.getenv("MONGO_SOCKET_TIMEOUT_MS", "5000")
+)
+
+ANALYTICS_RETENTION_DAYS = int(
+    os.getenv("ANALYTICS_RETENTION_DAYS", "90")
+)
+
+SECURE_SSL_REDIRECT = (
+    os.getenv("SECURE_SSL_REDIRECT", "False").lower() == "true"
+)
+SESSION_COOKIE_SECURE = (
+    os.getenv("SESSION_COOKIE_SECURE", "False").lower() == "true"
+)
+CSRF_COOKIE_SECURE = (
+    os.getenv("CSRF_COOKIE_SECURE", "False").lower() == "true"
+)
+
+SECURE_HSTS_SECONDS = int(
+    os.getenv("SECURE_HSTS_SECONDS", "0")
+)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = (
+    os.getenv("SECURE_HSTS_INCLUDE_SUBDOMAINS", "False").lower() == "true"
+)
+SECURE_HSTS_PRELOAD = (
+    os.getenv("SECURE_HSTS_PRELOAD", "False").lower() == "true"
+)
+
+SECURE_PROXY_SSL_HEADER = (
+    "HTTP_X_FORWARDED_PROTO",
+    "https",
+)
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", SECRET_KEY)
+JWT_ACCESS_MINUTES = int(os.getenv("JWT_ACCESS_MINUTES", "30"))
+JWT_REFRESH_DAYS = int(os.getenv("JWT_REFRESH_DAYS", "7"))
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES":["accounts.authentication.JWTAuthentication",],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "accounts.authentication.JWTAuthentication",
+    ],
+
+    "DEFAULT_THROTTLE_RATES": {
+        "analytics": "60/min",
+    },
+
+    "EXCEPTION_HANDLER": (
+        "analytics.exceptions.custom_exception_handler"
+    ),
+
+    "DEFAULT_SCHEMA_CLASS": (
+        "drf_spectacular.openapi.AutoSchema"
+    ),
 }
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "API Request Analytics Platform",
+    "DESCRIPTION": (
+        "API for authentication, request analytics, "
+        "monitoring, and observability."
+    ),
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "BearerAuth": {
+                "type": "http",
+                "scheme": "bearer",
+                "bearerFormat": "JWT",
+            }
+        }
+    },
+}
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+
+    "formatters": {
+        "standard": {
+            "format": (
+                "{levelname} | "
+                "{asctime} | "
+                "{name} | "
+                "{message}"
+            ),
+            "style": "{",
+        },
+    },
+
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "standard",
+        },
+    },
+
+    "loggers": {
+        "analytics": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "accounts": {
+            "handlers": ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

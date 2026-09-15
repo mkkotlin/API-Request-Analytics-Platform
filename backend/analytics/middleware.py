@@ -1,9 +1,42 @@
+import logging
 import time
 from uuid import uuid4
 from datetime import datetime, timezone
+from urllib.parse import urlencode
+
+from pymongo.errors import PyMongoError
 
 from .documents import APIRequestDocument
 from accounts.mongo import db
+
+logger = logging.getLogger(__name__)
+
+SENSITIVE_HEADERS = {
+    "HTTP_AUTHORIZATION",
+    "HTTP_COOKIE",
+    "HTTP_X_API_KEY",
+}
+
+SENSITIVE_QUERY_PARAMS = {
+    "password",
+    "token",
+    "access_token",
+    "refresh_token",
+    "api_key",
+    "secret",
+}
+
+
+def sanitize_query_params(query_params):
+    sanitized = []
+
+    for key, value in query_params.items():
+        if key.lower() in SENSITIVE_QUERY_PARAMS:
+            sanitized.append((key, "[REDACTED]"))
+        else:
+            sanitized.append((key, value))
+
+    return urlencode(sanitized)
 
 
 class APIRequestTrackingMiddleware:
@@ -65,18 +98,22 @@ class APIRequestTrackingMiddleware:
             hasattr(request, "user")
             and request.user.is_authenticated
         ):
-            user_id = request.user.id
-            user_role = request.user.role
+            user_id = getattr(request.user, "id", None)
+            user_role = getattr(request.user, "role", None)
+
+        status_code = (
+            response.status_code
+            if response
+            else 500
+        )
+
+        query_string = sanitize_query_params(request.GET)
 
         document = APIRequestDocument.create(
             request_id=request_id,
             method=request.method,
             endpoint=request.path,
-            status_code=(
-                response.status_code
-                if response
-                else 500
-            ),
+            status_code=status_code,
             response_time_ms=response_time_ms,
             timestamp=datetime.now(timezone.utc),
             user_id=user_id,
@@ -85,9 +122,7 @@ class APIRequestTrackingMiddleware:
             user_agent=request.META.get(
                 "HTTP_USER_AGENT"
             ),
-            query_string=request.META.get(
-                "QUERY_STRING"
-            ),
+            query_string=query_string,
             protocol=request.META.get(
                 "SERVER_PROTOCOL"
             ),
@@ -102,9 +137,29 @@ class APIRequestTrackingMiddleware:
             error=str(exception) if exception else None,
         )
 
-        db[
-            APIRequestDocument.collection_name
-        ].insert_one(document)
+        try:
+            db[
+                APIRequestDocument.collection_name
+            ].insert_one(document)
+
+            logger.info(
+                "API request completed",
+                extra={
+                    "request_id": request_id,
+                    "method": request.method,
+                    "endpoint": request.path,
+                    "status_code": status_code,
+                    "response_time_ms": round(response_time_ms, 2),
+                },
+            )
+        except PyMongoError:
+            logger.exception(
+                "Failed to store API analytics",
+                extra={
+                    "request_id": request_id,
+                    "endpoint": request.path,
+                },
+            )
 
     @staticmethod
     def _get_client_ip(request):

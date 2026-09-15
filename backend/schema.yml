@@ -1,0 +1,122 @@
+openapi: 3.0.3
+info:
+  title: API Request Analytics Platform
+  version: 1.0.0
+  description: API for authentication, request analytics, monitoring, and observability.
+paths:
+  /api/v1/analytics/dashboard/:
+    get:
+      operationId: v1_analytics_dashboard_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/analytics/endpoints/:
+    get:
+      operationId: v1_analytics_endpoints_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/analytics/errors/:
+    get:
+      operationId: v1_analytics_errors_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/analytics/methods/:
+    get:
+      operationId: v1_analytics_methods_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/analytics/response-times/:
+    get:
+      operationId: v1_analytics_response_times_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/analytics/status-codes/:
+    get:
+      operationId: v1_analytics_status_codes_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/analytics/summary/:
+    get:
+      operationId: v1_analytics_summary_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/analytics/users/:
+    get:
+      operationId: v1_analytics_users_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/login/:
+    post:
+      operationId: v1_auth_login_create
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: v1_auth_me_retrieve
+      tags:
+      - v1
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/refresh/:
+    post:
+      operationId: v1_auth_refresh_create
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/register/:
+    post:
+      operationId: v1_auth_register_create
+      tags:
+      - v1
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

@@ -1,0 +1,956 @@
+Phase 6.16 — CORS Configuration
+
+Your Angular frontend will run on a different origin from Django during development.
+
+For example:
+
+Angular
+http://localhost:4200
+        │
+        │ HTTP requests
+        ▼
+Django
+http://localhost:8000
+
+The browser will block these cross-origin requests unless Django explicitly allows the frontend origin.
+
+We'll configure CORS securely rather than allowing everything with *.
+
+1. Install django-cors-headers
+pip install django-cors-headers
+2. Add the app
+
+In settings.py:
+
+INSTALLED_APPS = [
+    # ...
+    "corsheaders",
+    "accounts",
+    "analytics",
+    "health",
+]
+3. Add the middleware
+
+Put CorsMiddleware near the top of MIDDLEWARE, before Django's CommonMiddleware:
+
+MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+
+    # your existing middleware...
+]
+
+Keep your existing request-tracking middleware in the appropriate position; don't remove it.
+
+4. Allow Angular development server
+
+Add:
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:4200",
+]
+
+Now:
+
+http://localhost:4200
+
+can call:
+
+http://localhost:8000/api/v1/...
+5. Don't use this
+
+Avoid:
+
+CORS_ALLOW_ALL_ORIGINS = True
+
+for your project.
+
+That effectively tells the browser:
+
+"Allow requests from any website."
+
+For a backend containing authenticated analytics APIs, explicit origins are better.
+
+6. Prepare for your deployed Angular frontend
+
+When you eventually deploy Angular, for example:
+
+https://your-angular-app.example
+
+you can add:
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:4200",
+    "https://your-angular-app.example",
+]
+
+Don't add the actual production URL until you have it.
+
+7. Test it
+
+Start Django:
+
+python manage.py runserver
+
+Start Angular:
+
+ng serve
+
+Your Angular application should be able to call:
+
+GET http://localhost:8000/api/v1/...
+
+without the browser producing a CORS error.
+
+You can also verify the response headers in browser DevTools → Network.
+
+You should see something similar to:
+
+Access-Control-Allow-Origin: http://localhost:4200
+One important distinction
+
+CORS is not authentication.
+
+It controls which browser origins are allowed to make cross-origin requests.
+
+Your security layers remain:
+
+CORS
+  ↓
+JWT Authentication
+  ↓
+RBAC
+  ↓
+Rate Limiting
+  ↓
+Validation
+  ↓
+MongoDB
+
+So even if another client ignores CORS—such as Postman or a backend script—it still needs a valid JWT and appropriate permissions.
+
+Phase 6.16 complete.
+
+Next: Phase 6.17 — Environment-Based Configuration, where we'll move development/production settings such as CORS origins, debug mode, JWT secrets, MongoDB URI, and retention values out of hardcoded settings.
+
+
+
+Phase 6.17 — Environment-Based Configuration
+
+Now we'll separate development configuration from production configuration.
+
+You already use environment variables for things like MongoDB and JWT, so we'll make the configuration more complete and consistent.
+
+1. Add environment variables
+
+Create/update your .env file:
+
+DEBUG=True
+
+SECRET_KEY=your-development-secret-key
+
+MONGO_URI=mongodb://localhost:27017
+MONGO_DB_NAME=api_analytics
+
+JWT_SECRET_KEY=your-jwt-secret-key
+JWT_ACCESS_MINUTES=30
+JWT_REFRESH_DAYS=7
+
+CORS_ALLOWED_ORIGINS=http://localhost:4200
+
+ANALYTICS_RETENTION_DAYS=90
+
+Do not commit .env to Git.
+
+Make sure .gitignore contains:
+
+.env
+2. Read CORS origins from environment
+
+In settings.py, instead of hardcoding:
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:4200",
+]
+
+use:
+
+CORS_ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:4200",
+    ).split(",")
+    if origin.strip()
+]
+
+Now you can have:
+
+CORS_ALLOWED_ORIGINS=http://localhost:4200
+
+and production can have:
+
+CORS_ALLOWED_ORIGINS=https://your-frontend.example
+3. Make DEBUG configurable
+
+If you currently have:
+
+DEBUG = True
+
+change it to:
+
+DEBUG = os.getenv("DEBUG", "False").lower() == "true"
+
+Development:
+
+DEBUG=True
+
+Production:
+
+DEBUG=False
+4. Make JWT configuration configurable
+
+You already have:
+
+JWT_SECRET_KEY = os.getenv(
+    "JWT_SECRET_KEY",
+    SECRET_KEY,
+)
+
+JWT_ACCESS_MINUTES = 30
+JWT_REFRESH_DAYS = 7
+
+Change the durations to:
+
+JWT_ACCESS_MINUTES = int(
+    os.getenv("JWT_ACCESS_MINUTES", "30")
+)
+
+JWT_REFRESH_DAYS = int(
+    os.getenv("JWT_REFRESH_DAYS", "7")
+)
+
+Now deployment configuration can change token lifetimes without modifying source code.
+
+5. Make retention configurable
+
+Instead of hardcoding:
+
+expireAfterSeconds=90 * 24 * 60 * 60
+
+in analytics/documents.py, define a setting:
+
+ANALYTICS_RETENTION_DAYS = int(
+    os.getenv("ANALYTICS_RETENTION_DAYS", "90")
+)
+
+Then use it:
+
+from django.conf import settings
+
+and:
+
+collection.create_index(
+    [("timestamp", 1)],
+    expireAfterSeconds=(
+        settings.ANALYTICS_RETENTION_DAYS
+        * 24
+        * 60
+        * 60
+    ),
+)
+
+Now:
+
+ANALYTICS_RETENTION_DAYS=90
+
+controls the retention period.
+
+6. Keep secrets out of source code
+
+Your source code should not contain:
+
+SECRET_KEY = "real-production-secret"
+
+or:
+
+MONGO_URI = "mongodb+srv://username:password@..."
+
+or:
+
+JWT_SECRET_KEY = "my-real-jwt-secret"
+
+Instead:
+
+Environment
+    │
+    ├── SECRET_KEY
+    ├── JWT_SECRET_KEY
+    ├── MONGO_URI
+    └── configuration
+          │
+          ▼
+       Django
+7. Production checklist
+
+When deploying later:
+
+DEBUG=False
+SECRET_KEY=<strong-random-secret>
+JWT_SECRET_KEY=<strong-random-secret>
+MONGO_URI=<production-mongodb-uri>
+MONGO_DB_NAME=api_analytics
+CORS_ALLOWED_ORIGINS=<production-frontend>
+
+Never reuse your development secrets in production.
+
+Phase 6.17 complete
+
+Your configuration is now environment-driven:
+
+Development
+    ↓
+.env
+    ↓
+Django
+
+
+Production
+    ↓
+Environment variables / deployment secrets
+    ↓
+Django
+
+This is much closer to how backend applications are deployed in real environments.
+
+Next: Phase 6.18 — Security Headers & Production Django Security Settings.
+
+
+
+Phase 6.18 — Security Headers & Production Django Security
+
+Now we'll harden Django's HTTP/security configuration for production.
+
+The important point: don't enable production-only settings blindly while developing on localhost. We'll make them environment-controlled.
+
+1. Add security settings to .env
+
+Add:
+
+SECURE_SSL_REDIRECT=False
+SESSION_COOKIE_SECURE=False
+CSRF_COOKIE_SECURE=False
+
+Keep these False locally because you're using HTTP.
+
+For production HTTPS:
+
+SECURE_SSL_REDIRECT=True
+SESSION_COOKIE_SECURE=True
+CSRF_COOKIE_SECURE=True
+2. Configure Django
+
+In settings.py:
+
+SECURE_SSL_REDIRECT = (
+    os.getenv("SECURE_SSL_REDIRECT", "False").lower() == "true"
+)
+
+SESSION_COOKIE_SECURE = (
+    os.getenv("SESSION_COOKIE_SECURE", "False").lower() == "true"
+)
+
+CSRF_COOKIE_SECURE = (
+    os.getenv("CSRF_COOKIE_SECURE", "False").lower() == "true"
+)
+3. Add HSTS for production
+
+Add:
+
+SECURE_HSTS_SECONDS = int(
+    os.getenv("SECURE_HSTS_SECONDS", "0")
+)
+
+SECURE_HSTS_INCLUDE_SUBDOMAINS = (
+    os.getenv(
+        "SECURE_HSTS_INCLUDE_SUBDOMAINS",
+        "False",
+    ).lower() == "true"
+)
+
+SECURE_HSTS_PRELOAD = (
+    os.getenv(
+        "SECURE_HSTS_PRELOAD",
+        "False",
+    ).lower() == "true"
+)
+
+Development:
+
+SECURE_HSTS_SECONDS=0
+
+Production, once HTTPS is confirmed:
+
+SECURE_HSTS_SECONDS=31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS=True
+SECURE_HSTS_PRELOAD=True
+
+Don't enable HSTS on a domain until you're sure HTTPS is permanently available.
+
+4. Configure secure proxy handling
+
+If production will sit behind Nginx, a load balancer, or another reverse proxy, Django may receive the internal HTTP connection even though the client used HTTPS.
+
+Add:
+
+SECURE_PROXY_SSL_HEADER = (
+    "HTTP_X_FORWARDED_PROTO",
+    "https",
+)
+
+Only use this when your trusted reverse proxy is configured to set and sanitize X-Forwarded-Proto.
+
+5. Configure allowed hosts
+
+Don't leave production hosts unrestricted.
+
+Use:
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv(
+        "ALLOWED_HOSTS",
+        "localhost,127.0.0.1",
+    ).split(",")
+    if host.strip()
+]
+
+Development:
+
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+Production example:
+
+ALLOWED_HOSTS=api.example.com
+6. Add security middleware
+
+Django's existing:
+
+"django.middleware.security.SecurityMiddleware",
+
+should remain near the beginning of MIDDLEWARE.
+
+It handles several security-related HTTP behaviors based on your settings.
+
+Don't add random third-party security middleware just for the sake of the project.
+
+7. Run Django's deployment checks
+
+This is the most useful part.
+
+Run:
+
+python manage.py check --deploy
+
+Django will inspect your configuration and report production security issues.
+
+You may see warnings while you're still developing locally—for example, HTTPS/HSTS-related warnings. That's expected because your local environment uses HTTP.
+
+8. Understand the final production flow
+
+Eventually you'll have:
+
+Internet
+   │
+   │ HTTPS
+   ▼
+Nginx / Load Balancer
+   │
+   │ HTTPS → internal HTTP
+   ▼
+Django
+   │
+   ├── SecurityMiddleware
+   ├── CORS
+   ├── Request Tracking
+   ├── JWT Authentication
+   ├── RBAC
+   ├── Rate Limiting
+   └── API
+        │
+        ▼
+     MongoDB
+
+This is also where your earlier Nginx knowledge becomes relevant: Nginx can terminate TLS, forward requests to Django, and provide another layer of infrastructure control.
+
+Phase 6.18 complete
+
+You've now covered:
+
+6.16  CORS
+6.17  Environment Configuration
+6.18  Production Security Settings
+
+Next: Phase 6.19 — MongoDB Connection Resilience, where we'll improve how your application handles MongoDB connection failures/timeouts instead of potentially hanging during database operations.
+
+
+Phase 6.19 — MongoDB Connection Resilience
+
+Right now your MongoDB client is created with:
+
+client = MongoClient(settings.MONGO_URI)
+
+For a real backend, we should explicitly configure timeouts and connection behavior.
+
+The goal is:
+
+MongoDB available
+      ↓
+normal operation
+
+MongoDB unavailable
+      ↓
+fail quickly
+      ↓
+return controlled error
+      ↓
+don't hang the API
+1. Update accounts/mongo.py
+
+Open:
+
+accounts/mongo.py
+
+Change it to:
+
+from pymongo import MongoClient
+from django.conf import settings
+
+
+client = MongoClient(
+    settings.MONGO_URI,
+    serverSelectionTimeoutMS=5000,
+    connectTimeoutMS=5000,
+    socketTimeoutMS=5000,
+)
+
+db = client[settings.MONGO_DB_NAME]
+
+These settings mean roughly:
+
+serverSelectionTimeoutMS
+    → maximum time to find a MongoDB server
+
+connectTimeoutMS
+    → maximum time to establish connection
+
+socketTimeoutMS
+    → maximum time waiting for socket operations
+
+The important one for your application is serverSelectionTimeoutMS.
+
+Without a reasonable timeout, an unavailable MongoDB server can make an API request wait unnecessarily long.
+
+2. Make the timeout configurable
+
+Better:
+
+from pymongo import MongoClient
+from django.conf import settings
+
+
+client = MongoClient(
+    settings.MONGO_URI,
+    serverSelectionTimeoutMS=settings.MONGO_SERVER_SELECTION_TIMEOUT_MS,
+    connectTimeoutMS=settings.MONGO_CONNECT_TIMEOUT_MS,
+    socketTimeoutMS=settings.MONGO_SOCKET_TIMEOUT_MS,
+)
+
+db = client[settings.MONGO_DB_NAME]
+
+Then in settings.py:
+
+MONGO_SERVER_SELECTION_TIMEOUT_MS = int(
+    os.getenv(
+        "MONGO_SERVER_SELECTION_TIMEOUT_MS",
+        "5000",
+    )
+)
+
+MONGO_CONNECT_TIMEOUT_MS = int(
+    os.getenv(
+        "MONGO_CONNECT_TIMEOUT_MS",
+        "5000",
+    )
+)
+
+MONGO_SOCKET_TIMEOUT_MS = int(
+    os.getenv(
+        "MONGO_SOCKET_TIMEOUT_MS",
+        "5000",
+    )
+)
+
+And .env:
+
+MONGO_SERVER_SELECTION_TIMEOUT_MS=5000
+MONGO_CONNECT_TIMEOUT_MS=5000
+MONGO_SOCKET_TIMEOUT_MS=5000
+3. Why not connect manually on every request?
+
+Don't do this:
+
+def some_view(request):
+    client = MongoClient(...)
+    db = client["api_analytics"]
+
+Your application should reuse the MongoDB client.
+
+MongoClient manages connection pooling internally.
+
+Your architecture should remain:
+
+Django process
+      │
+      ▼
+MongoClient
+      │
+      ├── connection pool
+      ├── connection
+      ├── connection
+      └── connection
+              │
+              ▼
+           MongoDB
+4. Handle MongoDB failures in readiness
+
+Your /api/ready/ endpoint already does:
+
+try:
+    db.command("ping")
+
+    return JsonResponse({
+        "status": "ready",
+        "dependencies": {
+            "mongodb": "ok",
+        },
+    })
+
+That's good.
+
+If MongoDB becomes unavailable:
+
+GET /api/ready/
+        ↓
+MongoDB ping
+        ↓
+failure
+        ↓
+503 Service Unavailable
+
+This is exactly what a readiness endpoint should do.
+
+5. Important distinction
+
+Don't make /api/health/ depend on MongoDB.
+
+Your health endpoint:
+
+/api/health/
+
+should answer:
+
+Is the Django application process alive?
+
+Your readiness endpoint:
+
+/api/ready/
+
+answers:
+
+Can the application currently serve requests that depend on MongoDB?
+
+So:
+
+Health
+  Django alive → 200
+
+
+Readiness
+  Django alive
+      +
+  MongoDB available
+      ↓
+  200
+6. Test it
+
+With MongoDB running:
+
+python manage.py runserver
+
+Then:
+
+GET /api/ready/
+
+Expected:
+
+{
+    "status": "ready",
+    "dependencies": {
+        "mongodb": "ok"
+    }
+}
+
+Now temporarily make the MongoDB URI invalid in your environment:
+
+MONGO_URI=mongodb://localhost:9999
+
+Restart Django and call:
+
+GET /api/ready/
+
+It should fail within roughly your configured timeout instead of waiting indefinitely.
+
+Restore your real MongoDB URI afterward.
+
+Phase 6.19 complete
+
+Your MongoDB layer now has:
+
+Connection pooling
+        +
+Connection timeout
+        +
+Server selection timeout
+        +
+Socket timeout
+        +
+Readiness monitoring
+
+That's a meaningful reliability improvement.
+
+Next: Phase 6.20 — Graceful Analytics Failure, where we'll prevent the analytics middleware itself from breaking normal API requests if MongoDB analytics storage temporarily fails.
+
+
+
+Phase 6.20 — Graceful Analytics Failure
+
+This is an important reliability improvement.
+
+Your middleware currently does two jobs:
+
+HTTP request
+    │
+    ▼
+Django API
+    │
+    ├── actual application response
+    │
+    └── save analytics → MongoDB
+
+The problem is: analytics should not bring down the actual API.
+
+If MongoDB analytics insertion fails, this:
+
+POST /api/v1/auth/login/
+       │
+       ├── Login succeeds
+       │
+       └── Analytics insert fails
+                    ↓
+               ❌ API fails
+
+would be bad.
+
+We want:
+
+POST /api/v1/auth/login/
+       │
+       ├── Login succeeds
+       │
+       └── Analytics insert fails
+                    ↓
+               ⚠ log error
+                    ↓
+               API still succeeds
+1. Add MongoDB exception handling
+
+Open:
+
+analytics/middleware.py
+
+Import:
+
+from pymongo.errors import PyMongoError
+
+Also make sure logging exists:
+
+import logging
+
+logger = logging.getLogger(__name__)
+2. Protect the analytics insertion
+
+Find the code where you currently insert:
+
+APIRequestDocument.create(db, data)
+
+or equivalent MongoDB insertion.
+
+Wrap only the analytics persistence operation:
+
+try:
+    APIRequestDocument.create(
+        db,
+        data,
+    )
+
+except PyMongoError:
+    logger.exception(
+        "Failed to store API analytics",
+        extra={
+            "request_id": request_id,
+            "endpoint": request.path,
+        },
+    )
+
+The important part is that we don't re-raise the exception.
+
+Don't do:
+
+except PyMongoError:
+    raise
+
+because that would allow the analytics failure to affect the API request.
+
+3. What happens now?
+
+MongoDB available:
+
+Request
+   ↓
+View
+   ↓
+Response
+   ↓
+Analytics saved
+   ↓
+Client receives response
+
+MongoDB unavailable:
+
+Request
+   ↓
+View
+   ↓
+Response
+   ↓
+Analytics save fails
+   ↓
+Log exception
+   ↓
+Client still receives response
+
+This is called failure isolation.
+
+4. Don't hide application errors
+
+There's an important distinction.
+
+If this fails:
+
+APIRequestDocument.create(...)
+
+we can safely treat it as an analytics failure.
+
+But if this fails:
+
+user_login()
+
+you should not silently swallow that exception.
+
+So don't wrap the entire middleware in:
+
+try:
+    # everything
+except Exception:
+    pass
+
+That's dangerous because it can hide real application bugs.
+
+Only protect the optional analytics operation.
+
+5. Use logger.exception()
+
+Use:
+
+logger.exception(
+    "Failed to store API analytics",
+    extra={
+        "request_id": request_id,
+        "endpoint": request.path,
+    },
+)
+
+rather than:
+
+logger.error("MongoDB failed")
+
+logger.exception() automatically includes the exception traceback.
+
+That gives you:
+
+ERROR | Failed to store API analytics
+Traceback:
+...
+PyMongoError: ...
+request_id=...
+
+This is extremely useful for debugging.
+
+6. Test the failure scenario
+
+Temporarily point your MongoDB configuration to an unavailable server:
+
+MONGO_URI=mongodb://localhost:9999
+
+Restart Django.
+
+Then call a normal API endpoint.
+
+The important result is:
+
+API response → still works
+
+while the terminal shows an analytics persistence error.
+
+After testing, restore your correct MongoDB URI.
+
+Architecture after Phase 6.20
+
+You now have:
+
+                 HTTP Request
+                      │
+                      ▼
+                  Django API
+                      │
+                ┌─────┴─────┐
+                │           │
+                ▼           ▼
+          API Response   Analytics
+                            │
+                            ▼
+                         MongoDB
+                            │
+                     failure isolated
+                            │
+                            ▼
+                         Log error
+
+This is a very good backend design point to discuss in interviews:
+
+"Analytics is observability functionality, so I isolated analytics persistence failures from the primary API request path. If MongoDB analytics storage temporarily fails, the business API can still return its response while the failure is logged using the request ID."
+
+Phase 6.20 complete

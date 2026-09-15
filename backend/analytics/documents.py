@@ -1,3 +1,7 @@
+from pymongo import ASCENDING, DESCENDING
+from django.conf import settings
+
+
 class APIRequestDocument:
 
     collection_name = "api_requests"
@@ -37,3 +41,20 @@ class APIRequestDocument:
             "response_content_type": response_content_type,
             "error": error,
         }
+
+
+    @staticmethod
+    def create_indexes(db):
+        collection = db[APIRequestDocument.collection_name]
+        collection.create_index([("request_id", ASCENDING)], unique=True)
+        collection.create_index([("timestamp", DESCENDING)])
+        collection.create_index(
+            [("timestamp", 1)],
+            expireAfterSeconds=settings.ANALYTICS_RETENTION_DAYS * 24 * 60 * 60,
+        )
+        collection.create_index([("endpoint", ASCENDING)])
+        collection.create_index([("status_code", ASCENDING)])
+        collection.create_index([("user_id", ASCENDING)])
+        collection.create_index([("method", ASCENDING)])
+        collection.create_index([("timestamp", DESCENDING), ("status_code", ASCENDING)])
+        collection.create_index([("timestamp", DESCENDING), ("endpoint", ASCENDING)])
