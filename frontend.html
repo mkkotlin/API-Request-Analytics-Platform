@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PulseAPI - API Request Analytics</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- Chart.js for visualization (Loads asynchronously) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous"></script>
+
+  <style>
+    :root {
+      --bg-base: #090d16;
+      --bg-surface: #111827;
+      --bg-card: rgba(31, 41, 55, 0.5);
+      --bg-card-hover: rgba(37, 47, 63, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-color-glow: rgba(59, 130, 246, 0.3);
+
+      --text-primary: #f9fafb;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+
+      --accent-blue: #3b82f6;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-purple: #8b5cf6;
+
+      --font-main: 'Inter', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-main);
+      min-height: 100vh;
+      line-height: 1.5;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 85% 75%, rgba(139, 92, 246, 0.06) 0%, transparent 40%);
+    }
+
+    /* Container */
+    .app-container {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+    }
+
+    .brand-logo svg {
+      width: 22px;
+      height: 22px;
+      stroke: white;
+      fill: none;
+      stroke-width: 2.2;
+    }
+
+    .brand-text h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #ffffff, #9ca3af);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    /* Mode Badge */
+    .mode-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    .mode-badge.demo {
+      background: rgba(245, 158, 11, 0.12);
+      color: var(--accent-amber);
+      border-color: rgba(245, 158, 11, 0.25);
+    }
+
+    .mode-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background-color: currentColor;
+      box-shadow: 0 0 8px currentColor;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* Buttons & Inputs */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      border: 1px solid var(--border-color);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-primary);
+    }
+
+    .btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-blue), #2563eb);
+      color: white;
+      border: none;
+      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
+      box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+    }
+
+    /* Control Toolbar */
+    .toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      padding: 0.75rem 1.25rem;
+      border-radius: 12px;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 0.4rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      transition: all 0.15s ease;
+    }
+
+    .filter-btn:hover {
+      color: var(--text-primary);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .filter-btn.active {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--accent-blue);
+      border-color: rgba(59, 130, 246, 0.3);
+      font-weight: 600;
+    }
+
+    /* Summary Grid */
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.25rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      backdrop-filter: blur(12px);
+      padding: 1.25rem;
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-color-glow);
+      background: var(--bg-card-hover);
+    }
+
+    .kpi-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .kpi-title {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .kpi-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .kpi-icon svg {
+      width: 18px;
+      height: 18px;
+      stroke-width: 2;
+    }
+
+    .kpi-value {
+      font-size: 1.85rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 0.25rem;
+      font-family: var(--font-mono);
+    }
+
+    .kpi-subtext {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .kpi-subtext.positive { color: var(--accent-emerald); }
+    .kpi-subtext.warning { color: var(--accent-amber); }
+    .kpi-subtext.danger { color: var(--accent-rose); }
+
+    /* Dashboard Main Content Grid */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 1.25rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      backdrop-filter: blur(12px);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .col-12 { grid-column: span 12; }
+    .col-8 { grid-column: span 8; }
+    .col-6 { grid-column: span 6; }
+    .col-4 { grid-column: span 4; }
+
+    @media (max-width: 1024px) {
+      .col-8, .col-6, .col-4 { grid-column: span 12; }
+    }
+
+    .card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-title-text {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .chart-container {
+      position: relative;
+      flex: 1;
+      min-height: 250px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Fallback Visual Charts */
+    .fallback-bar-chart {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .fallback-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 0.8rem;
+    }
+
+    .fallback-bar-label {
+      width: 70px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .fallback-bar-track {
+      flex: 1;
+      height: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .fallback-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    /* Tables */
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      text-align: left;
+    }
+
+    th {
+      color: var(--text-secondary);
+      font-weight: 500;
+      padding: 0.75rem 0.5rem;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 0.75rem 0.5rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* HTTP Method Badges */
+    .method-badge {
+      display: inline-block;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+    }
+
+    .method-get { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); border: 1px solid rgba(16, 185, 129, 0.3); }
+    .method-post { background: rgba(59, 130, 246, 0.15); color: var(--accent-blue); border: 1px solid rgba(59, 130, 246, 0.3); }
+    .method-put { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .method-delete { background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.3); }
+    .method-patch { background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); border: 1px solid rgba(139, 92, 246, 0.3); }
+
+    /* Code & Path formatting */
+    .endpoint-path {
+      font-family: var(--font-mono);
+      color: #e5e7eb;
+      font-size: 0.8rem;
+    }
+
+    .status-code {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+    }
+
+    .status-2xx { color: var(--accent-emerald); background: rgba(16, 185, 129, 0.1); }
+    .status-4xx { color: var(--accent-amber); background: rgba(245, 158, 11, 0.1); }
+    .status-5xx { color: var(--accent-rose); background: rgba(244, 63, 94, 0.1); }
+
+    /* Modal & Tabs */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .modal {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      width: 100%;
+      max-width: 440px;
+      border-radius: 16px;
+      padding: 1.75rem;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+    }
+
+    .modal-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+
+    .tab-header {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 1.25rem;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 0.5rem;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .tab-btn.active {
+      color: var(--accent-blue);
+      border-bottom-color: var(--accent-blue);
+      font-weight: 600;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.35rem;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 0.6rem 0.85rem;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: white;
+      font-size: 0.85rem;
+      font-family: inherit;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="brand-logo">
+          <svg viewBox="0 0 24 24">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>PulseAPI</h1>
+          <p>Request Analytics & Observability Platform</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <div id="modeBadge" class="mode-badge demo">
+          <span class="mode-dot"></span>
+          <span id="modeText">Demo Mode</span>
+        </div>
+
+        <button class="btn" id="openSettingsBtn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+          API Settings
+        </button>
+
+        <div id="authContainer">
+          <button class="btn btn-primary" id="openLoginBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+              <polyline points="10 17 15 12 10 7"></polyline>
+              <line x1="15" y1="12" x2="3" y2="12"></line>
+            </svg>
+            Sign In / Register
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="filter-group">
+        <button class="filter-btn active" data-period="24h">24 Hours</button>
+        <button class="filter-btn" data-period="7d">7 Days</button>
+        <button class="filter-btn" data-period="30d">30 Days</button>
+      </div>
+
+      <div style="display: flex; align-items: center; gap: 0.75rem;">
+        <span id="lastUpdated" style="font-size: 0.75rem; color: var(--text-muted);">Updated just now</span>
+        <button class="btn" id="refreshBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21.5 2v6h-6M2.1 12a10 10 0 0 1 15-6.7L21.5 8M2.5 22v-6h6M21.9 12a10 10 0 0 1-15 6.7L2.5 16"></path>
+          </svg>
+          Refresh
+        </button>
+      </div>
+    </div>
+
+    <!-- Summary KPI Grid -->
+    <div class="summary-grid">
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Total Requests</span>
+          <div class="kpi-icon" style="color: var(--accent-blue);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiTotalRequests">0</div>
+        <div class="kpi-subtext positive">
+          <span>↑ 12%</span> vs previous period
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Success Rate</span>
+          <div class="kpi-icon" style="color: var(--accent-emerald);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiSuccessRate">0%</div>
+        <div class="kpi-subtext positive" id="kpiSuccessSub">
+          <span>Operational</span>
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Avg Latency</span>
+          <div class="kpi-icon" style="color: var(--accent-purple);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiAvgResponse">0 ms</div>
+        <div class="kpi-subtext" id="kpiLatencySub">
+          Optimal response time
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Client Errors (4xx)</span>
+          <div class="kpi-icon" style="color: var(--accent-amber);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiClientErrors">0</div>
+        <div class="kpi-subtext warning">
+          Bad request & Auth errors
+        </div>
+      </div>
+
+      <div class="kpi-card">
+        <div class="kpi-header">
+          <span class="kpi-title">Server Errors (5xx)</span>
+          <div class="kpi-icon" style="color: var(--accent-rose);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          </div>
+        </div>
+        <div class="kpi-value" id="kpiServerErrors">0</div>
+        <div class="kpi-subtext danger">
+          Internal exceptions
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Dashboard Charts & Tables -->
+    <div class="dashboard-grid">
+      <!-- Response Time & Request Volume Chart -->
+      <div class="card col-8">
+        <div class="card-title">
+          <div class="card-title-text">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-blue)" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+            Request Volume & Method Breakdown
+          </div>
+        </div>
+        <div class="chart-container" id="methodsChartContainer">
+          <canvas id="methodsChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Status Code Distribution -->
+      <div class="card col-4">
+        <div class="card-title">
+          <div class="card-title-text">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-emerald)" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path><path d="M22 12A10 10 0 0 0 12 2v10z"></path></svg>
+            HTTP Status Code Distribution
+          </div>
+        </div>
+        <div class="chart-container" id="statusChartContainer">
+          <canvas id="statusChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Top Endpoints Table -->
+      <div class="card col-8">
+        <div class="card-title">
+          <div class="card-title-text">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-cyan)" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+            Top Requested API Endpoints
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Method</th>
+                <th>Endpoint Path</th>
+                <th>Request Count</th>
+                <th>Share</th>
+              </tr>
+            </thead>
+            <tbody id="endpointsTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Slowest Endpoints -->
+      <div class="card col-4">
+        <div class="card-title">
+          <div class="card-title-text">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-rose)" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+            Slowest Endpoints (Latency)
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Endpoint</th>
+                <th>Avg (ms)</th>
+                <th>Max (ms)</th>
+              </tr>
+            </thead>
+            <tbody id="slowestTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Error Logs -->
+      <div class="card col-6">
+        <div class="card-title">
+          <div class="card-title-text">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-amber)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+            Error Breakdown (4xx / 5xx)
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>Method</th>
+                <th>Endpoint</th>
+                <th>Status</th>
+                <th>Count</th>
+              </tr>
+            </thead>
+            <tbody id="errorsTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- User Activity -->
+      <div class="card col-6">
+        <div class="card-title">
+          <div class="card-title-text">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent-purple)" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 1 0 7.75"></path></svg>
+            API User Analytics
+          </div>
+        </div>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Role</th>
+                <th>Requests</th>
+                <th>Avg Latency</th>
+              </tr>
+            </thead>
+            <tbody id="usersTableBody">
+              <!-- Rendered via JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay" id="settingsModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">API Connection Settings</h3>
+        <button class="btn" style="padding: 0.2rem 0.5rem;" id="closeSettingsBtn">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Backend API Base URL</label>
+        <input type="text" id="apiBaseUrl" class="form-input" value="http://localhost:8000" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">JWT Bearer Token</label>
+        <input type="text" id="jwtTokenInput" class="form-input" placeholder="eyJhbGciOiJIUzI1Ni..." />
+      </div>
+      <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem;">
+        <input type="checkbox" id="forceDemoToggle" style="accent-color: var(--accent-blue);" />
+        <label for="forceDemoToggle" style="font-size: 0.85rem; cursor: pointer;">Force Standalone Demo Mode</label>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.5rem;">
+        <button class="btn btn-primary" id="saveSettingsBtn">Save & Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Auth Modal (Sign In / Register) -->
+  <div class="modal-overlay" id="loginModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title" id="authModalTitle">Account Authentication</h3>
+        <button class="btn" style="padding: 0.2rem 0.5rem;" id="closeLoginBtn">✕</button>
+      </div>
+
+      <!-- Auth Tabs -->
+      <div class="tab-header">
+        <button class="tab-btn active" id="loginTabBtn">Sign In</button>
+        <button class="tab-btn" id="registerTabBtn">Create Account</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm">
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="loginEmail" class="form-input" required placeholder="user@example.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="loginPass" class="form-input" required placeholder="••••••••" />
+        </div>
+        <div id="loginError" style="color: var(--accent-rose); font-size: 0.8rem; margin-bottom: 0.75rem; display: none;"></div>
+        <div id="loginSuccess" style="color: var(--accent-emerald); font-size: 0.8rem; margin-bottom: 0.75rem; display: none;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
+          <button type="submit" class="btn btn-primary" style="width: 100%;">Sign In</button>
+        </div>
+      </form>
+
+      <!-- Register Form -->
+      <form id="registerForm" style="display: none;">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input type="text" id="regUsername" class="form-input" required minlength="3" placeholder="admin" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <input type="email" id="regEmail" class="form-input" required placeholder="admin@example.com" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password (min 8 characters)</label>
+          <input type="password" id="regPass" class="form-input" required minlength="8" placeholder="••••••••" />
+        </div>
+        <div id="regError" style="color: var(--accent-rose); font-size: 0.8rem; margin-bottom: 0.75rem; display: none;"></div>
+        <div id="regSuccess" style="color: var(--accent-emerald); font-size: 0.8rem; margin-bottom: 0.75rem; display: none;"></div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1.25rem;">
+          <button type="submit" class="btn btn-primary" style="width: 100%;">Create Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Application Logic JS -->
+  <script>
+    // State management
+    const state = {
+      baseUrl: localStorage.getItem('pulse_api_url') || 'http://localhost:8000',
+      token: localStorage.getItem('pulse_jwt_token') || '',
+      period: '24h',
+      forceDemo: localStorage.getItem('pulse_force_demo') === 'true',
+      isLive: false,
+      user: null,
+      charts: {}
+    };
+
+    // DOM Elements
+    const elements = {
+      modeBadge: document.getElementById('modeBadge'),
+      modeText: document.getElementById('modeText'),
+      lastUpdated: document.getElementById('lastUpdated'),
+      settingsModal: document.getElementById('settingsModal'),
+      loginModal: document.getElementById('loginModal'),
+      apiBaseUrl: document.getElementById('apiBaseUrl'),
+      jwtTokenInput: document.getElementById('jwtTokenInput'),
+      forceDemoToggle: document.getElementById('forceDemoToggle'),
+      authContainer: document.getElementById('authContainer'),
+      
+      // KPI values
+      kpiTotal: document.getElementById('kpiTotalRequests'),
+      kpiSuccess: document.getElementById('kpiSuccessRate'),
+      kpiAvgResp: document.getElementById('kpiAvgResponse'),
+      kpiClientErr: document.getElementById('kpiClientErrors'),
+      kpiServerErr: document.getElementById('kpiServerErrors'),
+
+      // Tables
+      endpointsTable: document.getElementById('endpointsTableBody'),
+      slowestTable: document.getElementById('slowestTableBody'),
+      errorsTable: document.getElementById('errorsTableBody'),
+      usersTable: document.getElementById('usersTableBody')
+    };
+
+    // Safely set Chart.js defaults if library loaded
+    function setupChartDefaults() {
+      if (typeof Chart !== 'undefined') {
+        Chart.defaults.color = '#9ca3af';
+        Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+      }
+    }
+
+    // Setup event listeners
+    function initEvents() {
+      // Period filter buttons
+      document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+          e.target.classList.add('active');
+          state.period = e.target.dataset.period;
+          loadAnalyticsData();
+        });
+      });
+
+      // Modals
+      document.getElementById('openSettingsBtn').addEventListener('click', () => {
+        elements.apiBaseUrl.value = state.baseUrl;
+        elements.jwtTokenInput.value = state.token;
+        elements.forceDemoToggle.checked = state.forceDemo;
+        elements.settingsModal.classList.add('active');
+      });
+
+      document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+        elements.settingsModal.classList.remove('active');
+      });
+
+      document.getElementById('openLoginBtn').addEventListener('click', () => {
+        elements.loginModal.classList.add('active');
+      });
+
+      document.getElementById('closeLoginBtn').addEventListener('click', () => {
+        elements.loginModal.classList.remove('active');
+      });
+
+      // Auth Modal Tabs Toggle
+      const loginTabBtn = document.getElementById('loginTabBtn');
+      const registerTabBtn = document.getElementById('registerTabBtn');
+      const loginForm = document.getElementById('loginForm');
+      const registerForm = document.getElementById('registerForm');
+
+      loginTabBtn.addEventListener('click', () => {
+        loginTabBtn.classList.add('active');
+        registerTabBtn.classList.remove('active');
+        loginForm.style.display = 'block';
+        registerForm.style.display = 'none';
+      });
+
+      registerTabBtn.addEventListener('click', () => {
+        registerTabBtn.classList.add('active');
+        loginTabBtn.classList.remove('active');
+        registerForm.style.display = 'block';
+        loginForm.style.display = 'none';
+      });
+
+      document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+        state.baseUrl = elements.apiBaseUrl.value.trim();
+        state.token = elements.jwtTokenInput.value.trim();
+        state.forceDemo = elements.forceDemoToggle.checked;
+
+        localStorage.setItem('pulse_api_url', state.baseUrl);
+        localStorage.setItem('pulse_jwt_token', state.token);
+        localStorage.setItem('pulse_force_demo', state.forceDemo);
+
+        elements.settingsModal.classList.remove('active');
+        loadAnalyticsData();
+      });
+
+      document.getElementById('refreshBtn').addEventListener('click', () => {
+        loadAnalyticsData();
+      });
+
+      // Login form submission
+      document.getElementById('loginForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('loginEmail').value.trim();
+        const pass = document.getElementById('loginPass').value.trim();
+        const errDiv = document.getElementById('loginError');
+        const succDiv = document.getElementById('loginSuccess');
+
+        errDiv.style.display = 'none';
+        succDiv.style.display = 'none';
+
+        try {
+          const res = await fetch(`${state.baseUrl}/api/v1/auth/login/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: pass })
+          });
+
+          const data = await res.json();
+
+          if (res.ok && (data.access || data.token)) {
+            state.token = data.access || data.token;
+            localStorage.setItem('pulse_jwt_token', state.token);
+            succDiv.textContent = 'Sign in successful!';
+            succDiv.style.display = 'block';
+            setTimeout(() => {
+              elements.loginModal.classList.remove('active');
+              loadAnalyticsData();
+            }, 600);
+            return;
+          }
+
+          let errorMsg = 'Invalid credentials';
+          if (data.detail) errorMsg = data.detail;
+          else if (typeof data === 'object') {
+            errorMsg = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' | ');
+          }
+          errDiv.textContent = errorMsg;
+          errDiv.style.display = 'block';
+        } catch (err) {
+          errDiv.textContent = `Connection error (${state.baseUrl}). Verify server is running with CORS enabled.`;
+          errDiv.style.display = 'block';
+        }
+      });
+
+      // Register form submission
+      document.getElementById('registerForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('regUsername').value.trim();
+        const email = document.getElementById('regEmail').value.trim();
+        const pass = document.getElementById('regPass').value.trim();
+        const errDiv = document.getElementById('regError');
+        const succDiv = document.getElementById('regSuccess');
+
+        errDiv.style.display = 'none';
+        succDiv.style.display = 'none';
+
+        try {
+          const res = await fetch(`${state.baseUrl}/api/v1/auth/register/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, email: email, password: pass })
+          });
+
+          const data = await res.json();
+
+          if (res.ok) {
+            succDiv.textContent = 'Account created successfully! Attempting sign in...';
+            succDiv.style.display = 'block';
+            
+            // Auto login after registration
+            const loginRes = await fetch(`${state.baseUrl}/api/v1/auth/login/`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: email, password: pass })
+            });
+
+            if (loginRes.ok) {
+              const loginData = await loginRes.json();
+              if (loginData.access) {
+                state.token = loginData.access;
+                localStorage.setItem('pulse_jwt_token', state.token);
+              }
+            }
+
+            setTimeout(() => {
+              elements.loginModal.classList.remove('active');
+              loadAnalyticsData();
+            }, 800);
+            return;
+          }
+
+          let errorMsg = 'Registration failed';
+          if (data.detail) errorMsg = data.detail;
+          else if (typeof data === 'object') {
+            errorMsg = Object.entries(data).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`).join(' | ');
+          }
+          errDiv.textContent = errorMsg;
+          errDiv.style.display = 'block';
+        } catch (err) {
+          errDiv.textContent = `Connection error (${state.baseUrl}).`;
+          errDiv.style.display = 'block';
+        }
+      });
+    }
+
+    // Render Auth Button State in Header
+    function updateAuthHeader() {
+      if (state.token) {
+        elements.authContainer.innerHTML = `
+          <button class="btn" id="logoutBtn" style="border-color: rgba(244,63,94,0.3); color: var(--accent-rose);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            Sign Out
+          </button>
+        `;
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+          state.token = '';
+          localStorage.removeItem('pulse_jwt_token');
+          updateAuthHeader();
+          loadAnalyticsData();
+        });
+      } else {
+        elements.authContainer.innerHTML = `
+          <button class="btn btn-primary" id="openLoginBtn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+              <polyline points="10 17 15 12 10 7"></polyline>
+              <line x1="15" y1="12" x2="3" y2="12"></line>
+            </svg>
+            Sign In / Register
+          </button>
+        `;
+        document.getElementById('openLoginBtn').addEventListener('click', () => {
+          elements.loginModal.classList.add('active');
+        });
+      }
+    }
+
+    // Mock Data Generator for Standalone Demo Mode
+    function generateMockData() {
+      return {
+        summary: {
+          total_requests: 124850,
+          successful_requests: 120420,
+          client_errors: 3820,
+          server_errors: 610,
+          average_response_time_ms: 84.5
+        },
+        methods: [
+          { method: 'GET', request_count: 89400, average_response_time_ms: 45.2 },
+          { method: 'POST', request_count: 24300, average_response_time_ms: 112.8 },
+          { method: 'PUT', request_count: 7800, average_response_time_ms: 95.4 },
+          { method: 'DELETE', request_count: 2100, average_response_time_ms: 68.1 },
+          { method: 'PATCH', request_count: 1250, average_response_time_ms: 88.0 }
+        ],
+        statusCodes: [
+          { status_code: 200, request_count: 115200 },
+          { status_code: 201, request_count: 5220 },
+          { status_code: 400, request_count: 2100 },
+          { status_code: 401, request_count: 1120 },
+          { status_code: 404, request_count: 600 },
+          { status_code: 500, request_count: 510 },
+          { status_code: 503, request_count: 100 }
+        ],
+        endpoints: [
+          { method: 'GET', endpoint: '/api/v1/analytics/dashboard/', request_count: 45200 },
+          { method: 'GET', endpoint: '/api/v1/analytics/summary/', request_count: 28400 },
+          { method: 'POST', endpoint: '/api/v1/auth/login/', request_count: 15600 },
+          { method: 'GET', endpoint: '/api/v1/analytics/endpoints/', request_count: 12100 },
+          { method: 'GET', endpoint: '/api/v1/auth/me/', request_count: 9800 },
+          { method: 'POST', endpoint: '/api/v1/auth/register/', request_count: 4300 },
+          { method: 'GET', endpoint: '/api/v1/analytics/errors/', request_count: 3100 }
+        ],
+        slowestEndpoints: [
+          { method: 'GET', endpoint: '/api/v1/analytics/dashboard/', request_count: 45200, average_ms: 184.2, maximum_ms: 640.5 },
+          { method: 'POST', endpoint: '/api/v1/auth/register/', request_count: 4300, average_ms: 142.8, maximum_ms: 512.0 },
+          { method: 'GET', endpoint: '/api/v1/analytics/users/', request_count: 2800, average_ms: 118.4, maximum_ms: 390.2 },
+          { method: 'POST', endpoint: '/api/v1/auth/login/', request_count: 15600, average_ms: 98.6, maximum_ms: 320.1 }
+        ],
+        errors: [
+          { method: 'POST', endpoint: '/api/v1/auth/login/', status_code: 401, error_count: 1120 },
+          { method: 'GET', endpoint: '/api/v1/analytics/unknown/', status_code: 404, error_count: 600 },
+          { method: 'POST', endpoint: '/api/v1/auth/register/', status_code: 400, error_count: 520 },
+          { method: 'GET', endpoint: '/api/v1/analytics/dashboard/', status_code: 500, error_count: 510 }
+        ],
+        users: [
+          { user_id: 'usr_admin_01', role: 'ADMIN', request_count: 42100, average_response_time_ms: 62.4 },
+          { user_id: 'usr_service_account', role: 'SYSTEM', request_count: 38400, average_response_time_ms: 48.1 },
+          { user_id: 'usr_dev_team', role: 'DEVELOPER', request_count: 18200, average_response_time_ms: 78.9 },
+          { user_id: 'usr_analytics_bot', role: 'ANALYTICS', request_count: 14100, average_response_time_ms: 91.2 }
+        ]
+      };
+    }
+
+    // API Fetcher helper
+    async function apiFetch(endpoint) {
+      if (state.forceDemo) return null;
+
+      const headers = {};
+      if (state.token) {
+        headers['Authorization'] = `Bearer ${state.token}`;
+      }
+
+      try {
+        const res = await fetch(`${state.baseUrl}${endpoint}`, { headers });
+        if (res.ok) return await res.json();
+        return null;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Main Data Loader with try/catch guarantee
+    async function loadAnalyticsData() {
+      updateAuthHeader();
+
+      try {
+        let data = null;
+
+        // Attempt live API calls
+        const summaryRes = await apiFetch(`/api/v1/analytics/summary/`);
+        
+        if (summaryRes) {
+          state.isLive = true;
+          
+          const [methodsRes, statusRes, endpointsRes, responseRes, errorsRes, usersRes] = await Promise.all([
+            apiFetch('/api/v1/analytics/methods/'),
+            apiFetch('/api/v1/analytics/status-codes/'),
+            apiFetch('/api/v1/analytics/endpoints/'),
+            apiFetch('/api/v1/analytics/response-times/'),
+            apiFetch('/api/v1/analytics/errors/'),
+            apiFetch('/api/v1/analytics/users/')
+          ]);
+
+          data = {
+            summary: summaryRes,
+            methods: methodsRes ? methodsRes.methods : [],
+            statusCodes: statusRes ? statusRes.status_codes : [],
+            endpoints: endpointsRes ? endpointsRes.endpoints : [],
+            slowestEndpoints: responseRes ? responseRes.slowest_endpoints : [],
+            errors: errorsRes ? errorsRes.errors : [],
+            users: usersRes ? usersRes.users : []
+          };
+        } else {
+          state.isLive = false;
+          data = generateMockData();
+        }
+
+        updateUI(data);
+      } catch (err) {
+        console.error('Failed to load analytics data:', err);
+        updateUI(generateMockData());
+      }
+    }
+
+    // Update UI Elements
+    function updateUI(data) {
+      // Mode indicator
+      if (state.isLive) {
+        elements.modeBadge.className = 'mode-badge';
+        elements.modeText.textContent = 'Live API Connected';
+      } else {
+        elements.modeBadge.className = 'mode-badge demo';
+        elements.modeText.textContent = 'Demo Mode (Mock Data)';
+      }
+
+      elements.lastUpdated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+
+      // KPIs
+      const summary = data.summary;
+      elements.kpiTotal.textContent = summary.total_requests.toLocaleString();
+      
+      const successRate = summary.total_requests > 0 
+        ? ((summary.successful_requests / summary.total_requests) * 100).toFixed(1)
+        : '100.0';
+      
+      elements.kpiSuccess.textContent = `${successRate}%`;
+      elements.kpiAvgResp.textContent = `${summary.average_response_time_ms} ms`;
+      elements.kpiClientErr.textContent = summary.client_errors.toLocaleString();
+      elements.kpiServerErr.textContent = summary.server_errors.toLocaleString();
+
+      // Render Charts safely
+      renderMethodsChart(data.methods);
+      renderStatusChart(data.statusCodes);
+
+      // Render Tables
+      renderEndpointsTable(data.endpoints, summary.total_requests);
+      renderSlowestTable(data.slowestEndpoints);
+      renderErrorsTable(data.errors);
+      renderUsersTable(data.users);
+    }
+
+    // Render Methods Chart (with CSS Fallback if Chart.js fails to load)
+    function renderMethodsChart(methods) {
+      const container = document.getElementById('methodsChartContainer');
+      
+      if (typeof Chart !== 'undefined') {
+        const canvas = document.getElementById('methodsChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (state.charts.methods) state.charts.methods.destroy();
+
+        const labels = methods.map(m => m.method);
+        const counts = methods.map(m => m.request_count);
+        const latencies = methods.map(m => m.average_response_time_ms);
+
+        state.charts.methods = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: 'Request Count',
+                data: counts,
+                backgroundColor: 'rgba(59, 130, 246, 0.65)',
+                borderColor: '#3b82f6',
+                borderWidth: 1,
+                borderRadius: 6,
+                yAxisID: 'y'
+              },
+              {
+                label: 'Avg Latency (ms)',
+                data: latencies,
+                type: 'line',
+                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                borderWidth: 2,
+                tension: 0.3,
+                pointRadius: 4,
+                yAxisID: 'y1'
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: true, position: 'top' } },
+            scales: {
+              x: { grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+              y: { grid: { color: 'rgba(255, 255, 255, 0.05)' }, title: { display: true, text: 'Requests' } },
+              y1: { position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Latency (ms)' } }
+            }
+          }
+        });
+      } else {
+        // Render SVG / CSS fallback
+        const maxVal = Math.max(...methods.map(m => m.request_count), 1);
+        container.innerHTML = `
+          <div class="fallback-bar-chart">
+            ${methods.map(m => {
+              const pct = ((m.request_count / maxVal) * 100).toFixed(1);
+              return `
+                <div class="fallback-bar-row">
+                  <div class="fallback-bar-label"><span class="method-badge method-${m.method.toLowerCase()}">${m.method}</span></div>
+                  <div class="fallback-bar-track">
+                    <div class="fallback-bar-fill" style="width: ${pct}%; background: var(--accent-blue);"></div>
+                  </div>
+                  <div style="font-size: 0.75rem; color: var(--text-muted); width: 80px;">${m.request_count.toLocaleString()}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+    }
+
+    // Render Status Code Chart (with CSS Fallback)
+    function renderStatusChart(statusCodes) {
+      const container = document.getElementById('statusChartContainer');
+      
+      if (typeof Chart !== 'undefined') {
+        const canvas = document.getElementById('statusChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (state.charts.status) state.charts.status.destroy();
+
+        const labels = statusCodes.map(s => `HTTP ${s.status_code}`);
+        const counts = statusCodes.map(s => s.request_count);
+        const colors = statusCodes.map(s => {
+          const code = s.status_code;
+          if (code >= 200 && code < 300) return '#10b981';
+          if (code >= 400 && code < 500) return '#f59e0b';
+          if (code >= 500) return '#f43f5e';
+          return '#3b82f6';
+        });
+
+        state.charts.status = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: labels,
+            datasets: [{
+              data: counts,
+              backgroundColor: colors,
+              borderWidth: 0,
+              hoverOffset: 6
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { position: 'right' }
+            },
+            cutout: '70%'
+          }
+        });
+      } else {
+        // Fallback progress stacked bar
+        const total = statusCodes.reduce((sum, s) => sum + s.request_count, 0) || 1;
+        container.innerHTML = `
+          <div style="width: 100%; display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="height: 24px; border-radius: 6px; overflow: hidden; display: flex;">
+              ${statusCodes.map(s => {
+                const pct = ((s.request_count / total) * 100).toFixed(1);
+                let color = 'var(--accent-blue)';
+                if (s.status_code >= 200 && s.status_code < 300) color = 'var(--accent-emerald)';
+                if (s.status_code >= 400 && s.status_code < 500) color = 'var(--accent-amber)';
+                if (s.status_code >= 500) color = 'var(--accent-rose)';
+                return `<div style="width: ${pct}%; background: ${color}; height: 100%;" title="HTTP ${s.status_code}: ${s.request_count}"></div>`;
+              }).join('')}
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; font-size: 0.75rem;">
+              ${statusCodes.map(s => {
+                let color = 'var(--accent-blue)';
+                if (s.status_code >= 200 && s.status_code < 300) color = 'var(--accent-emerald)';
+                if (s.status_code >= 400 && s.status_code < 500) color = 'var(--accent-amber)';
+                if (s.status_code >= 500) color = 'var(--accent-rose)';
+                return `<div style="display: flex; align-items: center; gap: 0.3rem;"><span style="width: 8px; height: 8px; border-radius: 50%; background: ${color}; inline-block;"></span> HTTP ${s.status_code}: <strong>${s.request_count}</strong></div>`;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    // Render Endpoints Table
+    function renderEndpointsTable(endpoints, totalRequests) {
+      if (!endpoints || endpoints.length === 0) {
+        elements.endpointsTable.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No endpoint telemetry available</td></tr>`;
+        return;
+      }
+      elements.endpointsTable.innerHTML = endpoints.map(item => {
+        const pct = totalRequests > 0 ? ((item.request_count / totalRequests) * 100).toFixed(1) : 0;
+        const methodClass = `method-${item.method.toLowerCase()}`;
+        return `
+          <tr>
+            <td><span class="method-badge ${methodClass}">${item.method}</span></td>
+            <td class="endpoint-path">${item.endpoint}</td>
+            <td><strong>${item.request_count.toLocaleString()}</strong></td>
+            <td>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div style="flex:1; height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                  <div style="width: ${pct}%; height: 100%; background: var(--accent-blue);"></div>
+                </div>
+                <span style="font-size: 0.75rem; color: var(--text-muted); width: 35px;">${pct}%</span>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Render Slowest Table
+    function renderSlowestTable(slowest) {
+      if (!slowest || slowest.length === 0) {
+        elements.slowestTable.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No latency telemetry recorded</td></tr>`;
+        return;
+      }
+      elements.slowestTable.innerHTML = slowest.map(item => {
+        return `
+          <tr>
+            <td>
+              <span class="method-badge method-${item.method.toLowerCase()}">${item.method}</span>
+              <span class="endpoint-path" style="margin-left: 0.25rem;">${item.endpoint}</span>
+            </td>
+            <td><strong style="color: var(--accent-amber);">${item.average_ms}</strong></td>
+            <td><span style="color: var(--text-muted);">${item.maximum_ms}</span></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Render Errors Table
+    function renderErrorsTable(errors) {
+      if (!errors || errors.length === 0) {
+        elements.errorsTable.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No recent API errors recorded</td></tr>`;
+        return;
+      }
+      elements.errorsTable.innerHTML = errors.map(item => {
+        const codeClass = item.status_code >= 500 ? 'status-5xx' : 'status-4xx';
+        return `
+          <tr>
+            <td><span class="method-badge method-${item.method.toLowerCase()}">${item.method}</span></td>
+            <td class="endpoint-path">${item.endpoint}</td>
+            <td><span class="status-code ${codeClass}">${item.status_code}</span></td>
+            <td><strong style="color: var(--accent-rose);">${item.error_count.toLocaleString()}</strong></td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Render Users Table
+    function renderUsersTable(users) {
+      if (!users || users.length === 0) {
+        elements.usersTable.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No active user telemetry</td></tr>`;
+        return;
+      }
+      elements.usersTable.innerHTML = users.map(item => {
+        return `
+          <tr>
+            <td class="endpoint-path">${item.user_id}</td>
+            <td><span style="font-size: 0.7rem; font-weight: 600; padding: 0.15rem 0.4rem; background: rgba(139, 92, 246, 0.15); color: var(--accent-purple); border-radius: 4px;">${item.role || 'USER'}</span></td>
+            <td><strong>${item.request_count.toLocaleString()}</strong></td>
+            <td>${item.average_response_time_ms} ms</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Initialize Application
+    window.addEventListener('DOMContentLoaded', () => {
+      setupChartDefaults();
+      initEvents();
+      loadAnalyticsData();
+    });
+  </script>
+</body>
+</html>

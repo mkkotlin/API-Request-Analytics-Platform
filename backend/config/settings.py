@@ -163,6 +163,8 @@ CORS_ALLOWED_ORIGINS = [
     ).split(",")
     if origin.strip()
 ]
+CORS_ALLOW_ALL_ORIGINS = DEBUG
+
 
 MONGO_SERVER_SELECTION_TIMEOUT_MS = int(
     os.getenv("MONGO_SERVER_SELECTION_TIMEOUT_MS", "5000")
